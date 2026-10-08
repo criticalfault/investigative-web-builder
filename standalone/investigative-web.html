@@ -1,0 +1,796 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Investigative Web Builder</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Alegreya+Sans+SC:wght@500;700&family=Alegreya+Sans:ital,wght@0,400;0,500;0,700;1,400&display=swap">
+<style>
+html,body{margin:0}
+/* Layout: toolbar over a dark "night city" board; clue cards in a column grid, wires drawn in an SVG layer behind them, finale box spanning the bottom. Single dark look by choice. */
+:root {
+  color-scheme: dark;
+  --night: #0d131b;
+  --night-2: #172231;
+  --board-top: #1c2a3a;
+  --paper: #fbf9f4;
+  --ink: #221e1a;
+  --ink-soft: #5a524a;
+  --rust: #7a2420;
+  --wire: #f1eee6;
+  --chrome: #d3dbe4;
+  --muted: #8a98a8;
+  --line: rgba(211, 219, 228, 0.14);
+  --brass: #d0a95a;
+  --brass-ink: #1b1408;
+  --danger: #e0806e;
+  --font-sc: "Alegreya Sans SC", "Alegreya Sans", "Gill Sans", "Trebuchet MS", sans-serif;
+  --font-body: "Alegreya Sans", "Gill Sans", "Trebuchet MS", sans-serif;
+}
+html, body { height: auto; }
+body { background: var(--night); color: var(--chrome); font-family: var(--font-body); font-size: 15px; }
+#app { padding-block: 16px 48px; padding-inline: 16px; max-width: 1280px; margin: 0 auto; }
+
+/* Toolbar */
+.bar { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; margin-bottom: 14px; }
+.group { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.group .lbl { font-family: var(--font-sc); letter-spacing: .06em; font-size: 13px; color: var(--muted); margin-right: 2px; }
+.spacer { flex: 1 1 0; }
+select, .btn {
+  font: 500 14px/1 var(--font-body); color: var(--chrome); background: var(--night-2);
+  border: 1px solid var(--line); border-radius: 6px; padding: 8px 11px; min-height: 36px; cursor: pointer;
+}
+select { max-width: 240px; }
+.btn:hover, select:hover { border-color: rgba(211,219,228,.35); }
+.btn:focus-visible, select:focus-visible, .ctl:focus-visible, .tool:focus-visible, .add:focus-visible { outline: 2px solid var(--brass); outline-offset: 2px; }
+.btn.primary { background: var(--brass); color: var(--brass-ink); border-color: var(--brass); font-weight: 700; }
+.btn.warn { color: var(--danger); border-color: var(--danger); }
+.btn:disabled { opacity: .4; cursor: default; }
+.count { font-variant-numeric: tabular-nums; min-width: 1.4em; text-align: center; color: var(--chrome); }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.seg button { font: 500 14px/1 var(--font-body); background: var(--night-2); color: var(--muted); border: 0; padding: 9px 12px; min-height: 36px; cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--brass); color: var(--brass-ink); font-weight: 700; }
+
+/* Share panel */
+.panel { background: var(--night-2); border: 1px solid var(--line); border-radius: 8px; padding: 14px; margin-bottom: 14px; display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+.panel h4 { margin: 0 0 6px; font: 700 15px var(--font-sc); letter-spacing: .06em; color: var(--chrome); }
+.panel p { margin: 0 0 8px; color: var(--muted); font-size: 14px; }
+.panel textarea { width: 100%; box-sizing: border-box; min-height: 130px; background: var(--night); color: var(--chrome); border: 1px solid var(--line); border-radius: 6px; padding: 8px; font: 12px/1.4 ui-monospace, Menlo, Consolas, monospace; resize: vertical; }
+.panel .row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; align-items: center; }
+.msg { font-size: 13px; color: var(--brass); }
+.msg.err { color: var(--danger); }
+
+.hint { color: var(--muted); font-size: 13px; margin: -4px 0 12px; }
+
+/* Board */
+.scroller { overflow-x: auto; border-radius: 10px; border: 1px solid var(--line); }
+.board {
+  position: relative; box-sizing: border-box; padding: 22px 26px 34px;
+  background:
+    radial-gradient(ellipse 60% 30% at 20% 70%, rgba(150,170,200,.10), transparent 70%),
+    radial-gradient(ellipse 50% 25% at 85% 40%, rgba(150,170,200,.08), transparent 70%),
+    linear-gradient(180deg, var(--board-top) 0%, #121b26 55%, var(--night) 100%);
+}
+.head { position: relative; z-index: 1; text-align: center; margin-bottom: 18px; }
+.kicker { font: 700 13px var(--font-sc); letter-spacing: .14em; color: var(--muted); }
+.title { font: 700 26px/1.15 var(--font-sc); letter-spacing: .05em; color: var(--wire); margin: 2px 0 0; text-wrap: balance; }
+input.title { background: transparent; border: 0; border-bottom: 1px dashed var(--line); text-align: center; width: min(560px, 100%); padding: 2px 4px; }
+input.title:focus { outline: none; border-bottom-color: var(--brass); }
+
+.grid { position: relative; z-index: 1; display: grid; column-gap: 40px; row-gap: 22px; align-items: start; }
+.wires { position: absolute; left: 0; top: 0; z-index: 0; pointer-events: none; overflow: visible; }
+.wires .w { stroke: var(--wire); stroke-width: 3; fill: none; stroke-linecap: square; }
+.wires .ghost { stroke: var(--wire); stroke-opacity: .28; stroke-width: 2; stroke-dasharray: 5 6; fill: none; }
+.wires .tip { fill: var(--wire); }
+
+.card { position: relative; background: var(--paper); color: var(--ink); padding: 9px 12px 11px; box-shadow: 0 6px 18px rgba(0,0,0,.35); min-width: 0; }
+.card.entry, .card.finale { box-shadow: 0 0 0 3px var(--night-2), 0 0 0 5px var(--paper), 0 8px 22px rgba(0,0,0,.4); }
+.card h3, .card .ct { font: 700 16px/1.2 var(--font-sc); letter-spacing: .03em; color: var(--rust); margin: 0 0 3px; }
+.card p, .card .cb { font: 400 15px/1.32 var(--font-body); color: var(--ink); margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.card .ct, .card .cb { display: block; width: 100%; box-sizing: border-box; background: transparent; border: 0; padding: 0; resize: none; overflow: hidden; }
+.card .ct:focus, .card .cb:focus { outline: none; background: rgba(208,169,90,.14); }
+.card .ct::placeholder, .card .cb::placeholder { color: #a39a90; font-style: italic; }
+.card:focus-within { box-shadow: 0 0 0 2px var(--brass), 0 6px 18px rgba(0,0,0,.35); }
+
+.tools { display: flex; gap: 2px; justify-content: flex-end; margin-top: 6px; border-top: 1px solid #e7e2d8; padding-top: 5px; }
+.tool { background: transparent; border: 0; color: var(--ink-soft); font: 700 14px/1 var(--font-body); width: 28px; height: 26px; border-radius: 4px; cursor: pointer; }
+.tool:hover { background: #ece7dc; }
+.tool.del { color: #a33a2c; margin-left: auto; width: auto; padding: 0 8px; font-size: 13px; }
+.tool:disabled { opacity: .25; cursor: default; }
+
+.bendrow { display: flex; align-items: center; gap: 6px; margin-top: 7px; font: 500 13px var(--font-body); color: var(--ink-soft); }
+.bendrow select { flex: 1 1 auto; min-width: 0; min-height: 28px; padding: 3px 6px; font-size: 13px; color: var(--ink); background: #f1ece2; border-color: #d9d1c3; color-scheme: light; }
+.finchk { cursor: pointer; }
+.finchk input { width: 16px; height: 16px; margin: 0; accent-color: var(--rust); color-scheme: light; }
+.add { width: 100%; min-height: 64px; border: 1.5px dashed rgba(211,219,228,.28); background: rgba(13,19,27,.35); color: var(--muted); border-radius: 4px; font: 500 14px var(--font-body); cursor: pointer; }
+.add:hover { color: var(--chrome); border-color: rgba(211,219,228,.55); }
+.empty { min-height: 1px; }
+
+.finrow { position: relative; z-index: 1; margin-top: 46px; }
+.finlabel { font: 700 12px var(--font-sc); letter-spacing: .14em; color: var(--muted); text-align: left; margin-bottom: 8px; }
+
+.ctl {
+  position: absolute; z-index: 3; transform: translate(-50%, -50%);
+  min-width: 28px; height: 28px; padding: 0 6px; border-radius: 14px; cursor: pointer;
+  font: 700 15px/1 var(--font-body); display: grid; place-items: center;
+  background: var(--night-2); color: var(--chrome); border: 1.5px solid rgba(211,219,228,.45);
+  box-shadow: 0 2px 6px rgba(0,0,0,.5);
+}
+.ctl.on { background: var(--brass); color: var(--brass-ink); border-color: var(--brass); }
+.ctl:hover { border-color: var(--wire); }
+
+.board { padding-inline: 34px; }
+.tool.txt { width: auto; padding: 0 8px; font-size: 13px; color: var(--rust); }
+.card.src { box-shadow: 0 0 0 3px var(--brass), 0 8px 22px rgba(0,0,0,.4); }
+.pick {
+  position: absolute; inset: 0; z-index: 4; border: 2px dashed var(--brass); background: rgba(208,169,90,.16);
+  color: var(--brass-ink); font: 700 14px var(--font-sc); letter-spacing: .06em; cursor: pointer; display: grid; place-items: center;
+}
+.pick span { background: var(--brass); padding: 5px 10px; border-radius: 4px; }
+.pick:hover { background: rgba(208,169,90,.3); }
+.linkbar { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; background: var(--brass); color: var(--brass-ink); border-radius: 8px; padding: 8px 12px; margin-bottom: 10px; font-weight: 500; }
+.linkbar .btn { background: var(--brass-ink); color: var(--brass); border-color: var(--brass-ink); min-height: 30px; padding: 6px 10px; }
+.chip { min-width: 24px; height: 24px; font-size: 13px; border-radius: 12px; }
+.pop {
+  position: absolute; z-index: 6; width: 250px; box-sizing: border-box; background: var(--night-2); color: var(--chrome);
+  border: 1px solid rgba(211,219,228,.35); border-radius: 8px; padding: 10px 12px 12px; box-shadow: 0 10px 30px rgba(0,0,0,.55);
+  display: grid; gap: 8px;
+}
+.pop .ptitle { font: 700 14px/1.25 var(--font-sc); letter-spacing: .04em; color: var(--wire); overflow-wrap: anywhere; }
+.pop .plbl { font: 700 11px var(--font-sc); letter-spacing: .12em; color: var(--muted); margin-bottom: 4px; }
+.pop .opts { display: flex; flex-wrap: wrap; gap: 4px; }
+.pop .opts button { font: 500 13px/1 var(--font-body); background: var(--night); color: var(--chrome); border: 1px solid var(--line); border-radius: 5px; padding: 7px 8px; cursor: pointer; }
+.pop .opts button[aria-pressed="true"] { background: var(--brass); color: var(--brass-ink); border-color: var(--brass); font-weight: 700; }
+.pop .prow { display: flex; justify-content: space-between; gap: 8px; margin-top: 2px; }
+.pop .btn { min-height: 30px; padding: 6px 10px; font-size: 13px; }
+@media (max-width: 640px) {
+  .title { font-size: 21px; }
+  .spacer { display: none; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+</head>
+<body>
+<div id="app"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
+
+<script type="text/babel" data-presets="react">
+const { useState, useEffect, useLayoutEffect, useRef, useCallback } = React;
+
+const STORE = "investigative-web.v1";
+const K = (r, c) => `${r},${c}`;
+const RC = (k) => k.split(",").map(Number);
+const uid = () => Math.random().toString(36).slice(2, 10);
+const MAX_COLS = 6, MAX_ROWS = 14;
+const H_CYCLE = ["none", "line", "right", "left", "both"];
+const H_LABEL = { none: "+", line: "—", right: "→", left: "←", both: "↔" };
+const ROUTES = { drop: "Down & across", step: "Side step", jumpL: "Left gutter", jumpR: "Right gutter" };
+const ENDS = { none: "No arrows", end: "Arrow at target", start: "Arrow at source", both: "Both ends" };
+const FIN = "finale";
+
+function sampleWeb() {
+  const t = (title, body) => ({ title, body });
+  return {
+    id: uid(), name: "The Missing Clerk (sample)", rows: 5, cols: 3, showFinale: true,
+    cards: {
+      "0,0": t("Unpaid Debts", "A moneylender on the market's lower terraces has runners asking after Tavin."),
+      "1,0": t("Old Habits", "Tavin used to keep crooked ledgers for the moneylender, but walked away at the start of the season."),
+      "2,0": t("Honest Work", "Tavin took a night clerk's post at a lumber yard on the east edge of camp."),
+      "3,0": t("The Lumber Yard", "Unknown to the owners, the yard foreman skims tallies on timber bound for the warcamps and leans on his clerks to cover it. Tavin grew close to another clerk there, Mira."),
+      "4,0": t("The Overlook", "Tavin and Mira often mention their favorite spot after a shift: an abandoned watch post above the chasms."),
+      "0,1": t("Family Ties", "Tavin's brother Joss sells flatbread from a stall near the north gate."),
+      "1,1": t("Hard Feelings", "Joss has two kids and counted on the coin Tavin used to send home."),
+      "2,1": t("New Company", "Joss thinks Tavin dropped his family for a girl from work. Her name is Mira, and she rents a room near the yard."),
+      "3,1": t("Ransacked Room", "Mira's room has been turned over. Torn ledger pages are scattered across the floor."),
+      "0,2": t("Card Night", "Tavin plays cards most evenings behind a cookhouse with a handful of regulars."),
+      "1,2": t("Kept Quiet", "One of the players admits Tavin was scared someone would \"check the books.\""),
+      "2,2": t("Questions", "Two of the highprince's auditors questioned the players last week. They think Tavin's already been taken."),
+      "3,2": t("Still Looking", "Asking around reveals the auditors haven't found Tavin yet. They're searching the market for anyone who's seen him."),
+      "4,2": t("Closing In", "The auditors have pieced together the ledger pages and the gossip. They're watching the roads near the chasm edge."),
+    },
+    vOff: {}, finOff: {},
+    h: { "2,0": "left", "3,0": "both", "3,1": "left" },
+    links: [
+      { id: uid(), from: "3,1", to: "4,2", route: "drop", arrow: "end" },
+      { id: uid(), from: "0,2", to: "2,2", route: "jumpR", arrow: "none" },
+    ],
+    finale: t("Caught at the Overlook", "Following the auditors or searching the chasm edge leads to the old watch post. The party arrives as the auditors' hired guards drag Tavin and Mira out. The guards accuse the PCs of helping the thieves, and attack!"),
+  };
+}
+function blankWeb() {
+  return { id: uid(), name: "Untitled Web", rows: 4, cols: 3, showFinale: true, cards: {}, vOff: {}, h: {}, finOff: {}, links: [], finale: { title: "", body: "" } };
+}
+function normalize(w) {
+  const b = blankWeb();
+  const out = { ...b, ...w };
+  out.rows = Math.max(1, Math.min(MAX_ROWS, +out.rows || b.rows));
+  out.cols = Math.max(1, Math.min(MAX_COLS, +out.cols || b.cols));
+  for (const k of ["cards", "vOff", "h", "finOff"]) if (typeof out[k] !== "object" || !out[k]) out[k] = {};
+  if (!Array.isArray(out.links)) out.links = [];
+  if (out.bend && typeof out.bend === "object") {
+    for (const [from, to] of Object.entries(out.bend)) out.links.push({ id: uid(), from, to, route: "drop", arrow: "end" });
+  }
+  delete out.bend;
+  out.links = out.links.filter((l) => l && l.from && l.to).map((l) => ({ id: l.id || uid(), from: l.from, to: l.to, route: ROUTES[l.route] ? l.route : "drop", arrow: ENDS[l.arrow] ? l.arrow : "none" }));
+  if (!out.finale || typeof out.finale !== "object") out.finale = { title: "", body: "" };
+  out.showFinale = out.showFinale !== false;
+  out.name = String(out.name || "Untitled Web");
+  return prune(out);
+}
+function prune(w) {
+  const inside = (k) => { const [r, c] = RC(k); return r < w.rows && c < w.cols; };
+  for (const m of ["cards", "vOff", "h"]) for (const k of Object.keys(w[m])) if (!inside(k)) delete w[m][k];
+  for (const k of Object.keys(w.h)) { const [, c] = RC(k); if (c >= w.cols - 1) delete w.h[k]; }
+  for (const k of Object.keys(w.finOff)) if (+k >= w.cols) delete w.finOff[k];
+  w.links = (w.links || []).filter((l) => w.cards[l.from] && l.from !== l.to && (l.to === FIN ? w.showFinale : !!w.cards[l.to]));
+  return w;
+}
+function load() {
+  try {
+    const raw = localStorage.getItem(STORE);
+    if (raw) {
+      const d = JSON.parse(raw);
+      if (Array.isArray(d.webs) && d.webs.length) {
+        const webs = d.webs.map(normalize);
+        return { webs, currentId: webs.some((w) => w.id === d.currentId) ? d.currentId : webs[0].id };
+      }
+    }
+  } catch (e) {}
+  const s = sampleWeb();
+  return { webs: [s], currentId: s.id };
+}
+const clone = (o) => JSON.parse(JSON.stringify(o));
+
+function AutoText({ value, onChange, placeholder, className, autoFocus }) {
+  const ref = useRef(null);
+  useLayoutEffect(() => {
+    const el = ref.current; if (!el) return;
+    el.style.height = "0px"; el.style.height = el.scrollHeight + "px";
+  });
+  return <textarea ref={ref} rows={1} className={className} value={value} placeholder={placeholder}
+    autoFocus={autoFocus} onChange={(e) => onChange(e.target.value)} />;
+}
+
+const sideY = (R) => R.y + Math.min(R.h / 2, 34);
+
+// Which route styles make sense for a link.
+function routeChoices(l) {
+  if (l.to === FIN) return [];
+  const [, c1] = RC(l.from), [, c2] = RC(l.to);
+  return c1 === c2 ? ["jumpL", "jumpR"] : ["drop", "step", "jumpL", "jumpR"];
+}
+function defaultRoute(web, from, to) {
+  if (to === FIN) return { route: "drop", arrow: "none" };
+  const [r1, c1] = RC(from), [r2, c2] = RC(to);
+  if (c1 === c2) return { route: c1 === 0 ? "jumpL" : "jumpR", arrow: "none" };
+  return { route: r2 > r1 ? "drop" : "step", arrow: "end" };
+}
+
+// Turn a link into orthogonal points. Gutter x positions are adjusted later so parallel lines don't overlap.
+function routeLink(l, geo) {
+  const C = geo.cards, A = C[l.from];
+  if (!A) return null;
+  const ax = A.x + A.w / 2;
+  if (l.to === FIN) {
+    const F = geo.fin; if (!F) return null;
+    if (ax > F.x + 18 && ax < F.x + F.w - 18) return { pts: [[ax, A.y + A.h], [ax, F.y]] };
+    const ty = F.y + Math.min(40, F.h / 2);
+    return { pts: [[ax, A.y + A.h], [ax, ty], [ax < F.x ? F.x : F.x + F.w, ty]] };
+  }
+  const B = C[l.to]; if (!B) return null;
+  const bx = B.x + B.w / 2, ay = sideY(A), by = sideY(B);
+  let route = l.route;
+  const sameCol = Math.abs(ax - bx) < 4;
+  if (sameCol && (route === "drop" || route === "step")) route = "jumpR";
+  if (route === "drop") {
+    const down = by > A.y + A.h / 2;
+    const sy = down ? A.y + A.h : A.y;
+    if (ax > B.x + 8 && ax < B.x + B.w - 8) return { pts: [[ax, sy], [ax, down ? B.y : B.y + B.h]] };
+    return { pts: [[ax, sy], [ax, by], [bx > ax ? B.x : B.x + B.w, by]] };
+  }
+  if (route === "step") {
+    const right = bx > ax;
+    const ae = right ? A.x + A.w : A.x, be = right ? B.x : B.x + B.w;
+    const gx = (ae + be) / 2;
+    return { pts: [[ae, ay], [gx, ay], [gx, by], [be, by]], lane: { kind: "step", base: gx, sign: 1 } };
+  }
+  const R = route === "jumpR";
+  const ae = R ? A.x + A.w : A.x, be = R ? B.x + B.w : B.x;
+  const gx = R ? Math.max(ae, be) + 13 : Math.min(ae, be) - 13;
+  return { pts: [[ae, ay], [gx, ay], [gx, by], [be, by]], lane: { kind: route, base: gx, sign: R ? 1 : -1 } };
+}
+
+function layoutLinks(web, geo) {
+  if (!geo) return [];
+  const out = [];
+  for (const l of web.links) { const r = routeLink(l, geo); if (r) out.push({ ...r, l }); }
+  // Assign lanes: links sharing a gutter whose vertical spans overlap get spread apart.
+  const groups = {};
+  for (const o of out) if (o.lane) (groups[o.lane.kind + ":" + Math.round(o.lane.base / 10)] ||= []).push(o);
+  for (const g of Object.values(groups)) {
+    const lanes = [];
+    for (const o of g) {
+      const y1 = Math.min(o.pts[1][1], o.pts[2][1]) - 6, y2 = Math.max(o.pts[1][1], o.pts[2][1]) + 6;
+      let i = 0;
+      while (lanes[i] && lanes[i].some(([a, b]) => a < y2 && y1 < b)) i++;
+      (lanes[i] ||= []).push([y1, y2]);
+      const off = o.lane.kind === "step" ? (i % 2 ? 1 : -1) * Math.ceil(i / 2) * 8 : o.lane.sign * i * 8;
+      o.pts[1][0] += off; o.pts[2][0] += off;
+    }
+  }
+  for (const o of out) {
+    // chip sits on the longest segment
+    let best = 0, mx = 0, my = 0;
+    for (let i = 0; i < o.pts.length - 1; i++) {
+      const [x1, y1] = o.pts[i], [x2, y2] = o.pts[i + 1];
+      const len = Math.abs(x2 - x1) + Math.abs(y2 - y1);
+      if (len > best) { best = len; mx = (x1 + x2) / 2; my = (y1 + y2) / 2; }
+    }
+    o.mx = mx; o.my = my;
+  }
+  return out;
+}
+
+function Head({ x, y, dx, dy }) {
+  const bx = x - dx * 13, by = y - dy * 13, px = -dy * 8, py = dx * 8;
+  return <polygon className="tip" points={`${x},${y} ${bx + px},${by + py} ${bx - px},${by - py}`} />;
+}
+function Wire({ pts, arrow }) {
+  const p = pts.map((q) => [...q]);
+  const heads = [];
+  const unit = (a, b) => { const dx = b[0] - a[0], dy = b[1] - a[1], n = Math.hypot(dx, dy) || 1; return [dx / n, dy / n]; };
+  if (arrow === "end" || arrow === "both") {
+    const n = p.length - 1, [dx, dy] = unit(p[n - 1], p[n]);
+    heads.push({ x: p[n][0] - dx, y: p[n][1] - dy, dx, dy });
+    p[n] = [p[n][0] - dx * 7, p[n][1] - dy * 7];
+  }
+  if (arrow === "start" || arrow === "both") {
+    const [dx, dy] = unit(p[1], p[0]);
+    heads.push({ x: p[0][0] - dx, y: p[0][1] - dy, dx, dy });
+    p[0] = [p[0][0] - dx * 7, p[0][1] - dy * 7];
+  }
+  return (
+    <g>
+      <path className="w" d={"M" + p.map((q) => q.join(" ")).join(" L")} />
+      {heads.map((h, i) => <Head key={i} {...h} />)}
+    </g>
+  );
+}
+
+function computeBasic(web, geo) {
+  const out = { v: [], h: [], f: [] };
+  if (!geo) return out;
+  const C = geo.cards;
+  for (let c = 0; c < web.cols; c++) {
+    const rows = [];
+    for (let r = 0; r < web.rows; r++) if (C[K(r, c)]) rows.push(r);
+    for (let i = 0; i < rows.length - 1; i++) {
+      const a = K(rows[i], c), A = C[a], B = C[K(rows[i + 1], c)];
+      const x = A.x + A.w / 2;
+      out.v.push({ key: a, on: !web.vOff[a], x, y1: A.y + A.h / 2, y2: B.y + B.h / 2, my: (A.y + A.h + B.y) / 2 });
+    }
+    if (rows.length && geo.fin) {
+      const L = C[K(rows[rows.length - 1], c)], F = geo.fin;
+      const x = L.x + L.w / 2, y0 = L.y + L.h / 2;
+      let d;
+      if (x > F.x + 18 && x < F.x + F.w - 18) d = `M${x} ${y0} V${F.y}`;
+      else { const ty = F.y + Math.min(40, F.h / 2); d = `M${x} ${y0} V${ty} H${x < F.x ? F.x : F.x + F.w}`; }
+      out.f.push({ c, on: !web.finOff[c], d, x, my: (L.y + L.h + F.y) / 2 });
+    }
+  }
+  for (let r = 0; r < web.rows; r++) for (let c = 0; c < web.cols - 1; c++) {
+    const a = K(r, c), A = C[a], B = C[K(r, c + 1)];
+    if (!A || !B) continue;
+    const top = Math.max(A.y, B.y), bot = Math.min(A.y + A.h, B.y + B.h);
+    const y = bot > top ? (top + bot) / 2 : (A.y + A.h / 2 + B.y + B.h / 2) / 2;
+    out.h.push({ key: a, dir: web.h[a] || "none", x1: A.x + A.w, x2: B.x, y });
+  }
+  return out;
+}
+
+function sameGeo(a, b) {
+  const near = (p, q) => (!p && !q) || (p && q && Math.abs(p.x - q.x) <= 1 && Math.abs(p.y - q.y) <= 1 && Math.abs(p.w - q.w) <= 1 && Math.abs(p.h - q.h) <= 1);
+  if (Math.abs(a.w - b.w) > 1 || Math.abs(a.h - b.h) > 1 || !near(a.fin, b.fin)) return false;
+  const ka = Object.keys(a.cards), kb = Object.keys(b.cards);
+  if (ka.length !== kb.length) return false;
+  return ka.every((k) => near(a.cards[k], b.cards[k]));
+}
+
+function Board({ web, editing, update, focusKey, setFocusKey }) {
+  const boardRef = useRef(null), finRef = useRef(null), cardRefs = useRef({});
+  const webRef = useRef(web); webRef.current = web;
+  const [geo, setGeo] = useState(null);
+  const [linkFrom, setLinkFrom] = useState(null);
+  const [sel, setSel] = useState(null);
+
+  const measure = useCallback(() => {
+    const b = boardRef.current; if (!b) return;
+    const br = b.getBoundingClientRect();
+    const rect = (el) => { const r = el.getBoundingClientRect(); return { x: Math.round(r.left - br.left), y: Math.round(r.top - br.top), w: Math.round(r.width), h: Math.round(r.height) }; };
+    const cards = {};
+    for (const [k, el] of Object.entries(cardRefs.current)) if (el && webRef.current.cards[k]) cards[k] = rect(el);
+    const g = { cards, fin: finRef.current ? rect(finRef.current) : null, w: Math.round(br.width), h: Math.round(br.height) };
+    setGeo((prev) => (prev && sameGeo(prev, g) ? prev : g));
+  }, []);
+
+  useLayoutEffect(() => { measure(); });
+  const cardSig = Object.keys(web.cards).sort().join("|");
+  useEffect(() => {
+    const ro = new ResizeObserver(() => measure());
+    if (boardRef.current) ro.observe(boardRef.current);
+    Object.values(cardRefs.current).forEach((el) => el && ro.observe(el));
+    if (finRef.current) ro.observe(finRef.current);
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(measure);
+    window.addEventListener("resize", measure);
+    return () => { ro.disconnect(); window.removeEventListener("resize", measure); };
+  }, [measure, web.rows, web.cols, cardSig, editing, web.showFinale]);
+
+  useEffect(() => { if (!editing) { setLinkFrom(null); setSel(null); } }, [editing]);
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === "Escape") { setLinkFrom(null); setSel(null); } };
+    window.addEventListener("keydown", onKey); return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  const basic = computeBasic(web, geo);
+  const links = layoutLinks(web, geo);
+  const setCard = (k, patch) => update((w) => { w.cards[k] = { ...w.cards[k], ...patch }; return w; }, true);
+  const move = (k, dr, dc) => update((w) => {
+    const [r, c] = RC(k); const t = K(r + dr, c + dc);
+    const a = w.cards[k], b = w.cards[t];
+    if (b) w.cards[k] = b; else delete w.cards[k];
+    w.cards[t] = a;
+    const sw = (x) => (x === k ? t : x === t ? k : x);
+    w.links = w.links.map((l) => ({ ...l, from: sw(l.from), to: sw(l.to) }));
+    return w;
+  });
+  const removeCard = (k) => update((w) => { delete w.cards[k]; return w; });
+  const addCard = (k) => { update((w) => { w.cards[k] = { title: "", body: "" }; return w; }); setFocusKey(k); };
+  const finishLink = (to) => {
+    const from = linkFrom; setLinkFrom(null);
+    if (!from || from === to) return;
+    const existing = web.links.find((l) => l.from === from && l.to === to);
+    if (existing) { setSel(existing.id); return; }
+    const id = uid();
+    update((w) => { w.links.push({ id, from, to, ...defaultRoute(w, from, to) }); return w; });
+    setSel(id);
+  };
+  const setLink = (id, patch) => update((w) => { w.links = w.links.map((l) => (l.id === id ? { ...l, ...patch } : l)); return w; });
+  const delLink = (id) => { update((w) => { w.links = w.links.filter((l) => l.id !== id); return w; }); setSel(null); };
+
+  const firstInCol = {}, lastInCol = {};
+  for (let c = 0; c < web.cols; c++) for (let r = 0; r < web.rows; r++) if (web.cards[K(r, c)]) { if (!firstInCol[c]) firstInCol[c] = K(r, c); lastInCol[c] = K(r, c); }
+
+  const colMin = 190, gap = 40;
+  const minWidth = web.cols * colMin + (web.cols - 1) * gap + 68;
+  const finInset = web.cols > 1 ? `calc(${50 / web.cols}% + 22px)` : "0px";
+  const titleOf = (k) => (k === FIN ? (web.finale.title || "Finale") : ((web.cards[k] && web.cards[k].title) || "Untitled clue"));
+
+  const cells = [];
+  for (let r = 0; r < web.rows; r++) for (let c = 0; c < web.cols; c++) {
+    const k = K(r, c), card = web.cards[k];
+    const style = { gridRow: r + 1, gridColumn: c + 1 };
+    if (!card) {
+      cells.push(editing && !linkFrom
+        ? <div key={k} style={style}><button className="add" onClick={() => addCard(k)}>+ Add clue</button></div>
+        : <div key={k} style={style} className="empty" />);
+      continue;
+    }
+    const cls = "card" + (firstInCol[c] === k ? " entry" : "") + (linkFrom === k ? " src" : "");
+    cells.push(
+      <div key={k} style={style} className={cls} ref={(el) => { cardRefs.current[k] = el; }}>
+        {editing ? (
+          <>
+            <AutoText className="ct" value={card.title} placeholder="Clue title" autoFocus={focusKey === k} onChange={(v) => setCard(k, { title: v })} />
+            <AutoText className="cb" value={card.body} placeholder="What the PCs learn here…" onChange={(v) => setCard(k, { body: v })} />
+            {web.showFinale && lastInCol[c] === k && (
+              <label className="bendrow finchk">
+                <input type="checkbox" id={"fin-" + c} checked={!web.finOff[c]}
+                  onChange={(e) => { const on = e.target.checked; update((w) => { if (on) delete w.finOff[c]; else w.finOff[c] = true; return w; }); }} />
+                <span>Line to finale</span>
+              </label>
+            )}
+            <div className="tools">
+              <button className="tool" aria-label="Move up" disabled={r === 0} onClick={() => move(k, -1, 0)}>↑</button>
+              <button className="tool" aria-label="Move down" disabled={r === web.rows - 1} onClick={() => move(k, 1, 0)}>↓</button>
+              <button className="tool" aria-label="Move left" disabled={c === 0} onClick={() => move(k, 0, -1)}>←</button>
+              <button className="tool" aria-label="Move right" disabled={c === web.cols - 1} onClick={() => move(k, 0, 1)}>→</button>
+              <button className="tool txt" onClick={() => { setSel(null); setLinkFrom(k); }}>Link…</button>
+              <button className="tool del" onClick={() => removeCard(k)}>Delete</button>
+            </div>
+            {linkFrom && linkFrom !== k && <button className="pick" onClick={() => finishLink(k)}><span>Link here</span></button>}
+          </>
+        ) : (
+          <>
+            {card.title && <h3>{card.title}</h3>}
+            {card.body && <p>{card.body}</p>}
+          </>
+        )}
+      </div>
+    );
+  }
+
+  const selLink = sel && links.find((o) => o.l.id === sel);
+
+  return (
+    <>
+      {linkFrom && (
+        <div className="linkbar" role="status">
+          <span>Linking from <b>{titleOf(linkFrom)}</b>. Tap the clue it leads to.</span>
+          <button className="btn" onClick={() => setLinkFrom(null)}>Cancel</button>
+        </div>
+      )}
+      <div className="scroller">
+        <div className="board" ref={boardRef} style={{ minWidth }}>
+          {geo && (
+            <svg className="wires" width={geo.w} height={geo.h} aria-hidden="true">
+              {basic.v.map((l) => l.on
+                ? <line key={"v" + l.key} className="w" x1={l.x} x2={l.x} y1={l.y1} y2={l.y2} />
+                : editing && <line key={"v" + l.key} className="ghost" x1={l.x} x2={l.x} y1={l.y1} y2={l.y2} />)}
+              {basic.f.map((l) => l.on
+                ? <path key={"f" + l.c} className="w" d={l.d} />
+                : editing && <path key={"f" + l.c} className="ghost" d={l.d} />)}
+              {basic.h.map((l) => {
+                if (l.dir === "none") return editing ? <line key={"h" + l.key} className="ghost" x1={l.x1} x2={l.x2} y1={l.y} y2={l.y} /> : null;
+                const arrow = { line: "none", right: "end", left: "start", both: "both" }[l.dir];
+                return <Wire key={"h" + l.key} pts={[[l.x1, l.y], [l.x2, l.y]]} arrow={arrow} />;
+              })}
+              {links.map((o) => <Wire key={o.l.id} pts={o.pts} arrow={o.l.arrow} />)}
+            </svg>
+          )}
+
+          <div className="head">
+            <div className="kicker">Investigative Web</div>
+            {editing
+              ? <input className="title" id="web-name" aria-label="Web title" value={web.name} onChange={(e) => { const v = e.target.value; update((w) => { w.name = v; return w; }, true); }} />
+              : <h2 className="title">{web.name}</h2>}
+          </div>
+
+          <div className="grid" style={{ gridTemplateColumns: `repeat(${web.cols}, minmax(${colMin}px, 1fr))` }}>
+            {cells}
+          </div>
+
+          {web.showFinale && (
+            <div className="finrow" style={{ paddingInline: finInset }}>
+              {editing && <div className="finlabel">Finale</div>}
+              <div className={"card finale"} ref={finRef}>
+                {editing ? (
+                  <>
+                    <AutoText className="ct" value={web.finale.title} placeholder="Finale title" onChange={(v) => update((w) => { w.finale.title = v; return w; }, true)} />
+                    <AutoText className="cb" value={web.finale.body} placeholder="Where every thread leads…" onChange={(v) => update((w) => { w.finale.body = v; return w; }, true)} />
+                    {linkFrom && <button className="pick" onClick={() => finishLink(FIN)}><span>Link here</span></button>}
+                  </>
+                ) : (
+                  <>
+                    {web.finale.title && <h3>{web.finale.title}</h3>}
+                    {web.finale.body && <p>{web.finale.body}</p>}
+                  </>
+                )}
+              </div>
+            </div>
+          )}
+
+          {editing && geo && !linkFrom && (
+            <>
+              {basic.v.map((l) => (
+                <button key={"cv" + l.key} className={"ctl" + (l.on ? " on" : "")} style={{ left: l.x, top: l.my }}
+                  aria-label={l.on ? "Cut vertical link" : "Connect vertically"}
+                  onClick={() => update((w) => { if (w.vOff[l.key]) delete w.vOff[l.key]; else w.vOff[l.key] = true; return w; })}>
+                  {l.on ? "×" : "+"}
+                </button>
+              ))}
+              {basic.h.map((l) => (
+                <button key={"ch" + l.key} className={"ctl" + (l.dir !== "none" ? " on" : "")} style={{ left: (l.x1 + l.x2) / 2, top: l.y }}
+                  aria-label={`Side link: ${l.dir}. Click to change`}
+                  onClick={() => update((w) => { const next = H_CYCLE[(H_CYCLE.indexOf(w.h[l.key] || "none") + 1) % H_CYCLE.length]; if (next === "none") delete w.h[l.key]; else w.h[l.key] = next; return w; })}>
+                  {H_LABEL[l.dir]}
+                </button>
+              ))}
+              {basic.f.map((l) => (
+                <button key={"cf" + l.c} className={"ctl" + (l.on ? " on" : "")} style={{ left: l.x, top: l.my }}
+                  aria-label={l.on ? "Cut link to finale" : "Connect to finale"}
+                  onClick={() => update((w) => { if (w.finOff[l.c]) delete w.finOff[l.c]; else w.finOff[l.c] = true; return w; })}>
+                  {l.on ? "×" : "+"}
+                </button>
+              ))}
+              {links.map((o) => (
+                <button key={"cl" + o.l.id} className={"ctl chip" + (sel === o.l.id ? " on" : "")} style={{ left: o.mx, top: o.my }}
+                  aria-label={`Edit link from ${titleOf(o.l.from)} to ${titleOf(o.l.to)}`}
+                  onClick={() => setSel(sel === o.l.id ? null : o.l.id)}>✎</button>
+              ))}
+              {selLink && (
+                <div className="pop" style={{ left: Math.max(8, Math.min(selLink.mx - 125, geo.w - 258)), top: selLink.my + 18 }}>
+                  <div className="ptitle">{titleOf(selLink.l.from)} → {titleOf(selLink.l.to)}</div>
+                  {routeChoices(selLink.l).length > 0 && (
+                    <div>
+                      <div className="plbl">Route</div>
+                      <div className="opts">
+                        {routeChoices(selLink.l).map((r) => (
+                          <button key={r} aria-pressed={selLink.l.route === r || (r === "jumpR" && routeChoices(selLink.l).length === 2 && !["jumpL", "jumpR"].includes(selLink.l.route))}
+                            onClick={() => setLink(selLink.l.id, { route: r })}>{ROUTES[r]}</button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  <div>
+                    <div className="plbl">Arrows</div>
+                    <div className="opts">
+                      {Object.entries(ENDS).map(([a, label]) => (
+                        <button key={a} aria-pressed={selLink.l.arrow === a} onClick={() => setLink(selLink.l.id, { arrow: a })}>{label}</button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="prow">
+                    <button className="btn warn" onClick={() => delLink(selLink.l.id)}>Delete link</button>
+                    <button className="btn primary" onClick={() => setSel(null)}>Done</button>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      </div>
+    </>
+  );
+}
+
+function SharePanel({ web, onImport }) {
+  const [msg, setMsg] = useState(null);
+  const [paste, setPaste] = useState("");
+  const outRef = useRef(null);
+  const json = JSON.stringify({ ...web, id: undefined }, null, 2);
+  const copy = async () => {
+    try { await navigator.clipboard.writeText(json); setMsg({ t: "Copied to clipboard." }); }
+    catch (e) { outRef.current.select(); setMsg({ t: "Text selected. Copy it with your keyboard or the share menu." }); }
+  };
+  const doImport = (text) => {
+    try { const d = JSON.parse(text); onImport(d); setPaste(""); setMsg({ t: "Imported as a new web." }); }
+    catch (e) { setMsg({ t: "That isn't valid web JSON. Paste the full text from Export.", err: true }); }
+  };
+  const onFile = (e) => {
+    const f = e.target.files && e.target.files[0]; if (!f) return;
+    const rd = new FileReader(); rd.onload = () => doImport(String(rd.result)); rd.readAsText(f);
+    e.target.value = "";
+  };
+  return (
+    <div className="panel">
+      <div>
+        <h4>Export this web</h4>
+        <p>Copy the text and paste it somewhere safe, or into Import on another device.</p>
+        <textarea id="export-json" ref={outRef} readOnly value={json} onFocus={(e) => e.target.select()} />
+        <div className="row"><button className="btn primary" onClick={copy}>Copy</button></div>
+      </div>
+      <div>
+        <h4>Import a web</h4>
+        <p>Paste exported text, or pick a saved .json file. It's added as a new web.</p>
+        <textarea id="import-json" value={paste} placeholder='{"name": "…", "cards": { … } }' onChange={(e) => setPaste(e.target.value)} />
+        <div className="row">
+          <button className="btn primary" disabled={!paste.trim()} onClick={() => doImport(paste)}>Import</button>
+          <label className="btn" htmlFor="import-file">Choose file…</label>
+          <input id="import-file" type="file" accept=".json,application/json,text/plain" hidden onChange={onFile} />
+          {msg && <span className={"msg" + (msg.err ? " err" : "")}>{msg.t}</span>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function App() {
+  const [lib, setLib] = useState(load);
+  const [editing, setEditing] = useState(true);
+  const [share, setShare] = useState(false);
+  const [confirm, setConfirm] = useState(null);
+  const [focusKey, setFocusKey] = useState(null);
+  const [, force] = useState(0);
+  const hist = useRef([]), lastPush = useRef(0);
+  const web = lib.webs.find((w) => w.id === lib.currentId) || lib.webs[0];
+
+  useEffect(() => { try { localStorage.setItem(STORE, JSON.stringify(lib)); } catch (e) {} }, [lib]);
+  useEffect(() => { if (!confirm) return; const t = setTimeout(() => setConfirm(null), 3000); return () => clearTimeout(t); }, [confirm]);
+
+  const update = useCallback((fn, coalesce = false) => {
+    setLib((prev) => {
+      const cur = prev.webs.find((w) => w.id === prev.currentId) || prev.webs[0];
+      const now = Date.now();
+      if (!coalesce || now - lastPush.current > 900) {
+        hist.current.push({ id: cur.id, web: cur });
+        if (hist.current.length > 100) hist.current.shift();
+      }
+      lastPush.current = coalesce ? now : 0;
+      const next = prune(fn(clone(cur)));
+      return { ...prev, webs: prev.webs.map((w) => (w.id === cur.id ? next : w)) };
+    });
+    force((n) => n + 1);
+  }, []);
+
+  const undo = useCallback(() => {
+    const h = hist.current.pop(); if (!h) return;
+    lastPush.current = 0;
+    setLib((prev) => ({ ...prev, currentId: prev.webs.some((w) => w.id === h.id) ? h.id : prev.currentId, webs: prev.webs.map((w) => (w.id === h.id ? h.web : w)) }));
+    force((n) => n + 1);
+  }, []);
+
+  useEffect(() => {
+    const onKey = (e) => {
+      const tag = (e.target.tagName || "").toLowerCase();
+      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key.toLowerCase() === "z" && tag !== "input" && tag !== "textarea") { e.preventDefault(); undo(); }
+    };
+    window.addEventListener("keydown", onKey); return () => window.removeEventListener("keydown", onKey);
+  }, [undo]);
+
+  const addWeb = (w) => setLib((prev) => ({ webs: [...prev.webs, w], currentId: w.id }));
+  const deleteWeb = () => {
+    if (confirm !== "web") { setConfirm("web"); return; }
+    setConfirm(null);
+    setLib((prev) => {
+      let webs = prev.webs.filter((w) => w.id !== prev.currentId);
+      if (!webs.length) webs = [blankWeb()];
+      return { webs, currentId: webs[0].id };
+    });
+  };
+  const rowHas = (r) => Object.keys(web.cards).some((k) => RC(k)[0] === r);
+  const colHas = (c) => Object.keys(web.cards).some((k) => RC(k)[1] === c);
+  const removeRow = () => {
+    if (web.rows <= 1) return;
+    if (rowHas(web.rows - 1) && confirm !== "row") { setConfirm("row"); return; }
+    setConfirm(null); update((w) => { w.rows -= 1; return w; });
+  };
+  const removeCol = () => {
+    if (web.cols <= 1) return;
+    if (colHas(web.cols - 1) && confirm !== "col") { setConfirm("col"); return; }
+    setConfirm(null); update((w) => { w.cols -= 1; return w; });
+  };
+
+  return (
+    <>
+      <div className="bar">
+        <div className="group">
+          <select id="web-picker" aria-label="Choose web" value={web.id} onChange={(e) => { const id = e.target.value; setLib((p) => ({ ...p, currentId: id })); }}>
+            {lib.webs.map((w) => <option key={w.id} value={w.id}>{w.name || "Untitled Web"}</option>)}
+          </select>
+          <button className="btn" onClick={() => addWeb(blankWeb())}>New</button>
+          <button className="btn" onClick={() => { const c = clone(web); c.id = uid(); c.name = web.name + " (copy)"; addWeb(c); }}>Duplicate</button>
+          <button className={"btn" + (confirm === "web" ? " warn" : "")} onClick={deleteWeb}>{confirm === "web" ? "Delete web?" : "Delete"}</button>
+        </div>
+        {editing && (
+          <div className="group">
+            <span className="lbl">Rows</span>
+            <button className={"btn" + (confirm === "row" ? " warn" : "")} aria-label="Remove last row" disabled={web.rows <= 1} onClick={removeRow}>{confirm === "row" ? "Remove row?" : "−"}</button>
+            <span className="count">{web.rows}</span>
+            <button className="btn" aria-label="Add row" disabled={web.rows >= MAX_ROWS} onClick={() => update((w) => { w.rows += 1; return w; })}>+</button>
+            <span className="lbl" style={{ marginLeft: 8 }}>Columns</span>
+            <button className={"btn" + (confirm === "col" ? " warn" : "")} aria-label="Remove last column" disabled={web.cols <= 1} onClick={removeCol}>{confirm === "col" ? "Remove column?" : "−"}</button>
+            <span className="count">{web.cols}</span>
+            <button className="btn" aria-label="Add column" disabled={web.cols >= MAX_COLS} onClick={() => update((w) => { w.cols += 1; return w; })}>+</button>
+            <button className="btn" aria-pressed={web.showFinale} style={{ marginLeft: 8 }} onClick={() => update((w) => { w.showFinale = !w.showFinale; return w; })}>
+              {web.showFinale ? "Finale: on" : "Finale: off"}
+            </button>
+          </div>
+        )}
+        <div className="spacer" />
+        <div className="group">
+          <button className="btn" disabled={!hist.current.length} onClick={undo}>Undo</button>
+          <button className="btn" aria-pressed={share} onClick={() => setShare((s) => !s)}>{share ? "Close export" : "Export / Import"}</button>
+          <div className="seg" role="group" aria-label="Mode">
+            <button aria-pressed={editing} onClick={() => setEditing(true)}>Edit</button>
+            <button aria-pressed={!editing} onClick={() => { setEditing(false); setShare(false); }}>Present</button>
+          </div>
+        </div>
+      </div>
+      {share && <SharePanel web={web} onImport={(d) => { const w = normalize(d); w.id = uid(); addWeb(w); }} />}
+      {editing && <p className="hint">Round buttons set the basic links: between stacked clues they connect or cut, between side-by-side clues they cycle none, line, →, ← and ↔. For anything else, press <b>Link…</b> on a clue and tap where it leads. Tap ✎ on a link to change its route or arrows. Your webs save in this browser.</p>}
+      <Board web={web} editing={editing} update={update} focusKey={focusKey} setFocusKey={setFocusKey} />
+    </>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("app")).render(<App />);
+</script>
+
+</body>
+</html>

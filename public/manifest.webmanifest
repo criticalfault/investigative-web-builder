@@ -1,0 +1,9 @@
+{
+  "name": "Investigative Web Builder",
+  "short_name": "Inv. Web",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0d131b",
+  "theme_color": "#0d131b",
+  "icons": [{ "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml" }]
+}
